@@ -10,6 +10,15 @@ Project {
         consoleApplication: true
         type: ["application", "hex", "bin", "size", "elf", "disassembly"]
 
+        Group {
+            name : "Drivers"
+            prefix : device.driverDir
+            files : [
+                "clock.h",
+                "clock.cpp"
+            ]
+        }
+
         Group {     // Properties for the produced executable
             name : "Sources"
             files : [
@@ -19,13 +28,15 @@ Project {
         cpp.defines: device.defines
         cpp.includePaths : device.includePaths
 
-        cpp.linkerFlags: [
+        cpp.linkerFlags : [
             "-lc",
             "-lnosys",
             "-specs=nosys.specs"
         ].concat(device.archFlags)
 
-        cpp.commonCompilerFlags: [
+        cpp.cxxLanguageVersion : "c++14"
+
+        cpp.commonCompilerFlags : [
 
         ].concat(device.archFlags)
     }
