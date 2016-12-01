@@ -15,7 +15,12 @@ Project {
             prefix : device.driverDir
             files : [
                 "clock.h",
-                "clock.cpp"
+                "clock.cpp",
+                "gpio.h",
+                "adc.h",
+                "uart.h",
+                //"uart.cpp",
+                "../queue.cpp"
             ]
         }
 
