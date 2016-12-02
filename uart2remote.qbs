@@ -19,6 +19,7 @@ Project {
                 "gpio.h",
                 "adc.h",
                 "uart.h",
+                "timer.h",
                 //"uart.cpp",
                 "../queue.cpp"
             ]
