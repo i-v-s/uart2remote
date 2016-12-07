@@ -3,31 +3,44 @@
 #include "uart.h"
 #include "timer.h"
 #include <stm32f1xx.h>
+#include "nvic.h"
 
 typedef SystemClock<> Clock;
 
-int main()
+Pins<IO_A, 0xF> controlPins;
+Pins<IO_A, (1 << 9)> txPin;
+Pins<IO_A, (1 << 10)> rxPin;
+Pins<IO_C, (1 << 9)> greenLed;
+Pins<IO_C, (1 << 8)> blueLed;
+Usart<Usart1> uart;
+Timer<Timer2> timer;
+
+void initialize()
 {
-    auto rcc = RCC;
     Clock::init();
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_ADC1EN | RCC_APB2ENR_USART1EN; // Включим порт А, АЦП и USART
+    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPCEN
+            | RCC_APB2ENR_ADC1EN | RCC_APB2ENR_USART1EN; // Включим порты А и C, АЦП и USART
 
-    auto a = GPIOA;
-    Pins<IO_A, 0xF> pins;
-    //pins.init<IO_Analog>();
+    txPin.init<IO_AF0>();
+    rxPin.init<IO_In>();
+    greenLed.init<IO_Out>();
+    blueLed.init<IO_Out>();
 
-    Pins<IO_A, (1 << 9)> tx;
-    int m = tx.getMask();
-    tx.init<IO_AF0>();
-    Pins<IO_A, (1 << 10)> rx;
-    rx.init<IO_In>();
-    Usart<Usart1> uart;
     uart.init<Clock, 115200>();
-    USART_TypeDef u = uart.u();
 
-    Timer<Timer2> timer;
+    timer.setPwmMode<0xF>();
+    timer.ccr<0>(32);
+    timer.ccr<1>(32);
+    timer.ccr<2>(32);
+    timer.ccr<3>(32);
+    timer.enable(64);
 
+    setSysTick<Clock>(0.001);
+}
+
+void initializeADC()
+{
     RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_ADCPRE) | RCC_CFGR_ADCPRE_DIV8;
 
     ADC1->CR1= 0;//ADC_CR1_JDISCEN|ADC_CR1_JAUTO;
@@ -44,20 +57,104 @@ int main()
     {
     }
     ADC1->CR2 |= ADC_CR2_JSWSTART;
-    auto adc = ADC1;
+}
 
-    pins.init<IO_AF0>();
-    timer.setPwmMode<0xF>();
-    timer.ccr()[0] = 30;
-    timer.ccr()[1] = 30;
-    timer.ccr()[2] = 30;
-    timer.ccr()[3] = 30;
-    timer.enable(64);
+enum { passive, halt, active } state = passive;
+
+void setPassiveState()
+{
+    controlPins.init<IO_Analog>();
+    greenLed.set();
+    blueLed.clear();
+    state = passive;
+}
+
+void setHaltState()
+{
+    timer.ccr<0>(32);
+    timer.ccr<1>(0);
+    timer.ccr<2>(32);
+    timer.ccr<3>(32);
+    controlPins.init<IO_AF0>();
+    greenLed.clear();
+    blueLed.set();
+    state = halt;
+}
+
+inline void setActiveState()
+{
+    controlPins.init<IO_AF0>();
+    greenLed.set();
+    blueLed.set();
+    state = active;
+}
+
+int haltCounter;
+
+void onCommand(const char * c)
+{
+    switch(*c)
+    {
+    case 'h': setHaltState(); break;
+    case 'p': setPassiveState(); break;
+    case 'a':
+        {
+            unsigned char outs[4], * op = outs;
+            for(c++; op < outs + 4; c += 2)
+            {
+                uint32_t c1 = c[0] - '0', c2 = c[1] - '0';
+                if(c1 > 9 || c2 > 9) return;
+                c2 += c1 * 10;
+                if(c2 > 65) return;
+                *(op++) = c2;
+            }
+            timer.ccr<0>(outs[0]);
+            timer.ccr<1>(outs[1]);
+            timer.ccr<2>(outs[2]);
+            timer.ccr<3>(outs[3]);
+            haltCounter = 100;
+            if (state != active) setActiveState();
+        }
+    }
+}
+
+int main()
+{
+    /*auto rcc = RCC;
+    auto a = GPIOA;
+    auto adc = ADC1;
     auto tim = TIM2;
+    USART_TypeDef u = uart.u();*/
+
+    //int t = [] { };
+    char data[16], *dp = nullptr;
+
+    initialize();
+    initializeADC();
+
+    setPassiveState();
     while (true)
     {
         //if((ADC1->CR2 & ADC_CR2_JSWSTART)==0) ADC1->CR2 |= ADC_CR2_JSWSTART;
-        uart.sendSync('O');
+        if(uart.rxne()) switch(char c = uart.recv())
+        {
+        case '+': dp = data; break;
+        case ';': if (dp) {
+                *dp = 0;
+                onCommand(data);
+                dp = nullptr;
+            } break;
+        default:
+            if(!dp) break;
+            if (dp < data + sizeof(data) - 1) {
+                *(dp++) = c;
+            } else dp = 0;
+        }
+        if (state == active && sysTickFlag()) {
+            if(haltCounter) haltCounter--;
+            else setHaltState();
+        }
+        /*uart.sendSync('O');
         //rx.clear();
         uart.sendSync('k');
         //rx.*set();
@@ -65,7 +162,7 @@ int main()
         uart.sendSync(10);
         //uart.sendSync(ADC1->JDR1);
         uint32_t c = uart.recvSync();
-        timer.ccr()[(c >> 6) & 3] = c & 63;
+        timer.ccr()[(c >> 6) & 3] = c & 63;*/
 
         //for(int x = 1000000; --x;);
 

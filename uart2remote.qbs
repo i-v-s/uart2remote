@@ -16,11 +16,12 @@ Project {
             files : [
                 "clock.h",
                 "clock.cpp",
+                "nvic.h",
                 "gpio.h",
                 "adc.h",
                 "uart.h",
+                "uart.cpp",
                 "timer.h",
-                //"uart.cpp",
                 "../queue.cpp"
             ]
         }
