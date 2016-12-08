@@ -15,6 +15,8 @@ Pins<IO_C, (1 << 8)> blueLed;
 Usart<Usart1> uart;
 Timer<Timer2> timer;
 
+const uint32_t top = 50;
+
 void initialize()
 {
     Clock::init();
@@ -30,11 +32,11 @@ void initialize()
     uart.init<Clock, 115200>();
 
     timer.setPwmMode<0xF>();
-    timer.ccr<0>(32);
-    timer.ccr<1>(32);
-    timer.ccr<2>(32);
-    timer.ccr<3>(32);
-    timer.enable(64);
+    timer.ccr<0>(top / 2);
+    timer.ccr<1>(top / 2);
+    timer.ccr<2>(top / 2);
+    timer.ccr<3>(top / 2);
+    timer.enable(top - 1);
 
     setSysTick<Clock>(0.001);
 }
@@ -71,10 +73,10 @@ void setPassiveState()
 
 void setHaltState()
 {
-    timer.ccr<0>(32);
+    timer.ccr<0>(top / 2);
     timer.ccr<1>(0);
-    timer.ccr<2>(32);
-    timer.ccr<3>(32);
+    timer.ccr<2>(top / 2);
+    timer.ccr<3>(top / 2);
     controlPins.init<IO_AF0>();
     greenLed.clear();
     blueLed.set();
@@ -105,7 +107,7 @@ void onCommand(const char * c)
                 uint32_t c1 = c[0] - '0', c2 = c[1] - '0';
                 if(c1 > 9 || c2 > 9) return;
                 c2 += c1 * 10;
-                if(c2 > 65) return;
+                if(c2 > top) return;
                 *(op++) = c2;
             }
             timer.ccr<0>(outs[0]);
@@ -126,7 +128,6 @@ int main()
     auto tim = TIM2;
     USART_TypeDef u = uart.u();*/
 
-    //int t = [] { };
     char data[16], *dp = nullptr;
 
     initialize();
@@ -154,18 +155,5 @@ int main()
             if(haltCounter) haltCounter--;
             else setHaltState();
         }
-        /*uart.sendSync('O');
-        //rx.clear();
-        uart.sendSync('k');
-        //rx.*set();
-        uart.sendSync(13);
-        uart.sendSync(10);
-        //uart.sendSync(ADC1->JDR1);
-        uint32_t c = uart.recvSync();
-        timer.ccr()[(c >> 6) & 3] = c & 63;*/
-
-        //for(int x = 1000000; --x;);
-
-
     }
 }
